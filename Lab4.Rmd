@@ -154,8 +154,64 @@ this work for our data?
 svm_result <- svm(t(combat_edata), as.factor(pheno$hasCancer),
                   kernel = "linear")
 svm_result$fitted[1:5]
-# just a way to visualize the result, not needed for HW2
 confusionMatrix(svm_result$fitted, as.factor(pheno$hasCancer))$table
+```
+
+## Cross-validation
+
+- SVMs have a `cost` parameter: controls the penalty for
+misclassification
+- How to set? Need to use cross-validation.
+- Cross-validation: split up the data. Train on one portion, get an
+estimate of the error on the other.
+- Prevents overfitting
+
+![Source:
+https://en.wikipedia.org/wiki/Cross-validation_(statistics)](K-fold_cross_validation.jpg)
+
+## SVM: Toy example
+
+```{r simdata}
+# Simulate points in an annulus using rejection sampling. Won't actually
+# get n points per try. r1 and r2 are the inner and outer radii,
+# respectively.
+sim_annulus <- function(n, r1, r2) {
+    # don't worry about this code! Not needed for Stat115.
+    stopifnot(r1 < r2)
+    pts <- matrix(runif(2 * n, -1, 1), nrow = n, ncol = 2)
+    radii <- sqrt((pts[, 1])^2 + (pts[, 2])^2)
+    good_inds <- (radii >= r1) & (radii <= r2)
+    good_pts <- pts[good_inds,]
+    colnames(good_pts) = c("x", "y")
+    return(good_pts)
+}
+
+# generate the data
+set.seed(0) # set seed for reproducibility
+circ1 <- sim_annulus(2500, 0.3, 0.5)
+circ2 <- sim_annulus(1000, 0.8, 1)
+circ_dat <- rbind(circ1, circ2)
+type <- c(rep("Type 1", nrow(circ1)), rep("Type 2", nrow(circ2)))
+circ_df <- as.data.frame(circ_dat)
+circ_df$type <- as.factor(type)
+head(circ_df)
+ggplot(circ_df, aes(x = x, y = y, color = type)) + geom_point()
+```
+
+## SVM: Using Linear kernel
+
+```{r svm-linear}
+set.seed(0)
+shuffle_inds <- sample(1:nrow(circ_df), replace = FALSE)
+svm_tune <- tune(svm, type ~ ., data = circ_df[shuffle_inds,],
+                 kernel = "linear",
+                 ranges = list(cost = c(0.01, 0.1, 1, 10)),
+                 tunecontrol = tune.control(cross = 3))
+plot(svm_tune)
+svm_tune
+svm_circ <- svm(type ~ x + y, data = circ_df, kernel = "linear", cost = 0.1)
+confusionMatrix(svm_circ$fitted, type)$table
+plot(svm_circ, circ_df)
 ```
 
 ## SVM: Nonlinear
@@ -182,49 +238,13 @@ p2 <- ggplot(example_dat, aes(x = x^2, y = y, color = type)) +
 plot_grid(p1, p2, nrow = 1)
 ```
 
-## SVM: Nonlinear example
 
-```{r simdata, echo = FALSE}
-# don't worry about this code! Not needed for Stat115.
+## SVM: Using Radial Kernel on Toy Example
 
-# Simulate points in an annulus using rejection sampling. Won't actually
-# get n points per try. r1 and r2 are the inner and outer radii,
-# respectively.
-sim_annulus <- function(n, r1, r2) {
-    stopifnot(r1 < r2)
-    pts <- matrix(runif(2 * n, -1, 1), nrow = n, ncol = 2)
-    radii <- sqrt((pts[, 1])^2 + (pts[, 2])^2)
-    good_inds <- (radii >= r1) & (radii <= r2)
-    good_pts <- pts[good_inds,]
-    colnames(good_pts) = c("x", "y")
-    return(as.data.frame(good_pts))
-}
-
-# generate the data
-set.seed(0) # set seed for reproducibility
-circ1 <- sim_annulus(2500, 0.3, 0.5)
-circ1$type <- "Type 1"
-circ2 <- sim_annulus(1000, 0.8, 1)
-circ2$type <- "Type 2"
-dat <- rbind(circ1, circ2)
-dat$type <- as.factor(dat$type)
-ggplot(dat, aes(x = x, y = y, color = type)) + geom_point()
-```
-
-## SVM: Using Linear kernel
-
-```{r svm-linear, echo = FALSE}
-svm_circ <- svm(type ~ x + y, data = dat, kernel = "linear", cost = 100)
-confusionMatrix(svm_circ$fitted, dat$type)$table
-plot(svm_circ, dat)
-```
-
-## SVM: Using Radial Kernel
-
-```{r svm-radial, echo = FALSE}
-svm_circ_radial <- svm(type ~ x + y, data = dat, kernel = "radial")
-confusionMatrix(svm_circ_radial$fitted, dat$type)$table
-plot(svm_circ_radial, dat)
+```{r svm-radial}
+svm_circ_radial <- svm(type ~ x + y, data = circ_df, kernel = "radial")
+confusionMatrix(svm_circ_radial$fitted, circ_df$type)$table
+plot(svm_circ_radial, circ_df)
 ```
 
 ## BWA
@@ -246,7 +266,7 @@ bwa aln index.fa sample.fastq > sample.sai
 bwa samse index.fa sample.1M.sai sample.fastq > sample.sam
 samtools flagstat sample.sam
 ```
- 
+
 ## Odyssey
 
 - What is Odyssey? Lots of computers stringed together

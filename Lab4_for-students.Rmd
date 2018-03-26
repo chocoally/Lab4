@@ -101,20 +101,41 @@ $(1, 2, \ldots, 57)$?
 ## PCA Variance Explained: Your turn
 
 ```{r pca-var-explained}
+str(pca_raw)
+
 # your turn
+eigenvals <- (pca_raw$sdev)^2
+n_eigenvals <- length(eigenvals)
+
+# naive way
+var_explained1 <- rep(NA, n_eigenvals)
+for (i in 1:n_eigenvals) {
+    var_explained1[i] <- sum(eigenvals[1:i]) / sum(eigenvals)
+}
+plot(1:n_eigenvals, var_explained1, type = "l")
+
+# vectorized way
+var_explained <- cumsum(eigenvals) / sum(eigenvals)
+plot(1:n_eigenvals, var_explained, type = "l")
 ```
 
 ## PCA After ComBat: Does it change?
 
 ```{r combat}
-# your turn
-# run combat on edata to remove batch effect (see Lab 3)
-# combat_edata <- ComBat(...)
+model <- model.matrix(~hasCancer, data = pheno)
+combat_edata <- ComBat(dat = edata, batch = pheno$batch, mod = model)
 ```
 
 ```{r pca-combat}
-# your turn
-# run PCA on the data from ComBat, draw a plot of the result
+pca <- prcomp(t(combat_edata), center = TRUE, scale. = TRUE)
+edata_pca <- as.data.frame(pca$x)
+edata_pca$batch <- as.factor(pheno$batch)
+edata_pca$hasCancer <- as.factor(pheno$hasCancer)
+
+ggplot(edata_pca, aes(x = PC1, y = PC2, color = batch)) +
+    geom_point()
+ggplot(edata_pca, aes(x = PC1, y = PC2, color = hasCancer)) +
+    geom_point()
 ```
 
 ## SVM Overview
@@ -183,9 +204,10 @@ shuffle_inds <- sample(1:nrow(circ_df), replace = FALSE)
 svm_tune <- tune(svm, type ~ ., data = circ_df[shuffle_inds,],
                  kernel = "linear",
                  ranges = list(cost = c(0.01, 0.1, 1, 10)),
-                 tunecontrol = tune.control(cross = 3))
+                 tunecontrol = tune.control(cross = 3)) # cross-validate by dividing into 4 partitions, use 3 to train each time
 plot(svm_tune)
 svm_tune
+
 svm_circ <- svm(type ~ x + y, data = circ_df, kernel = "linear", cost = 0.1)
 confusionMatrix(svm_circ$fitted, type)$table
 plot(svm_circ, circ_df)
